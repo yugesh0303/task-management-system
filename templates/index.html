@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Manager</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📝 Task Manager</h1>
+      <p class="subtitle">Add, track, and manage your tasks</p>
+    </header>
+
+    <section class="add-task-card">
+      <h2>Add a New Task</h2>
+      <form id="task-form">
+        <div class="form-row">
+          <input type="text" id="title" placeholder="Task name" required>
+        </div>
+        <div class="form-row">
+          <textarea id="description" placeholder="Description (optional)" rows="2"></textarea>
+        </div>
+        <div class="form-row form-row-inline">
+          <select id="priority">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="High">High</option>
+          </select>
+          <button type="submit" class="btn btn-primary">Add Task</button>
+        </div>
+      </form>
+      <p id="form-error" class="error-msg"></p>
+    </section>
+
+    <section class="filters">
+      <button class="filter-btn active" data-filter="All">All</button>
+      <button class="filter-btn" data-filter="Pending">Pending</button>
+      <button class="filter-btn" data-filter="Completed">Completed</button>
+    </section>
+
+    <section id="task-list" class="task-list">
+      <p class="empty-msg" id="empty-msg">Loading tasks…</p>
+    </section>
+  </div>
+
+  <!-- Edit modal -->
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Edit Task</h2>
+      <input type="hidden" id="edit-id">
+      <div class="form-row">
+        <input type="text" id="edit-title" placeholder="Task name" required>
+      </div>
+      <div class="form-row">
+        <textarea id="edit-description" placeholder="Description" rows="2"></textarea>
+      </div>
+      <div class="form-row form-row-inline">
+        <select id="edit-priority">
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+        </select>
+        <select id="edit-status">
+          <option value="Pending">Pending</option>
+          <option value="Completed">Completed</option>
+        </select>
+      </div>
+      <div class="form-row form-row-inline">
+        <button id="save-edit-btn" class="btn btn-primary">Save</button>
+        <button id="cancel-edit-btn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
