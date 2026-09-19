@@ -1,29 +1,20 @@
 """
-Task Manager - Flask Backend
+Task  Manager - Flask Backend
 =============================
 Exposes a REST API for CRUD operations on tasks and serves the
 static frontend (HTML/CSS/JS).
-
-Database:
-    Uses SQLAlchemy so it can talk to MySQL (via PyMySQL) in
-    production, but defaults to a local SQLite file so the app
-    runs out-of-the-box with zero external setup. Switch databases
-    purely via the DATABASE_URL environment variable (see README).
 """
 
 import os
-from datetime import datetime
-
+from datetime import datetime, timezone
 from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 
-# ---------------------------------------------------------------------
+
 # App & Database configuration
-# ---------------------------------------------------------------------
+
 app = Flask(__name__)
 
-# Example MySQL URL (set this as an env var to use MySQL instead of SQLite):
-#   mysql+pymysql://<user>:<password>@<host>:3306/<db_name>
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///tasks.db")
 
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
@@ -35,9 +26,9 @@ VALID_PRIORITIES = ("Low", "Medium", "High")
 VALID_STATUSES = ("Pending", "Completed")
 
 
-# ---------------------------------------------------------------------
+
 # Model
-# ---------------------------------------------------------------------
+
 class Task(db.Model):
     __tablename__ = "tasks"
 
@@ -46,7 +37,11 @@ class Task(db.Model):
     description = db.Column(db.Text, nullable=True)
     priority = db.Column(db.String(10), nullable=False, default="Medium")
     status = db.Column(db.String(20), nullable=False, default="Pending")
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(
+        db.DateTime, 
+        nullable=False, 
+        default=lambda: datetime.now(timezone.utc)
+    )
 
     def to_dict(self):
         return {
@@ -55,21 +50,34 @@ class Task(db.Model):
             "description": self.description,
             "priority": self.priority,
             "status": self.status,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
-# ---------------------------------------------------------------------
+
+# Automatic Database Initialization
+# Ensures database tables are created automatically before processing any request. This is useful for development and testing.
+_db_initialized = False
+
+@app.before_request
+def init_db():
+    global _db_initialized
+    if not _db_initialized:
+        db.create_all()
+        _db_initialized = True
+
+
+
 # Frontend route
-# ---------------------------------------------------------------------
+
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
-# ---------------------------------------------------------------------
+
 # REST API
-# ---------------------------------------------------------------------
+
 @app.route("/api/tasks", methods=["GET"])
 def get_tasks():
     """GET /api/tasks?status=All|Pending|Completed"""
@@ -152,11 +160,10 @@ def not_found(e):
     return jsonify({"error": "Resource not found"}), 404
 
 
-# ---------------------------------------------------------------------
+
 # Entry point
-# ---------------------------------------------------------------------
-with app.app_context():
-    db.create_all()
 
 if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
     app.run(debug=True, host="0.0.0.0", port=5000)

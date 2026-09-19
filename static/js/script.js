@@ -1,198 +1,251 @@
-const API_BASE = "/api/tasks";
+document.addEventListener("DOMContentLoaded", () => {
+  const taskForm = document.getElementById("task-form");
+  const taskList = document.getElementById("task-list");
+  const emptyMsg = document.getElementById("empty-msg");
+  const formError = document.getElementById("form-error");
+  const filterBtns = document.querySelectorAll(".filter-btn");
 
-let currentFilter = "All";
+  const editModal = document.getElementById("edit-modal");
+  const saveEditBtn = document.getElementById("save-edit-btn");
+  const cancelEditBtn = document.getElementById("cancel-edit-btn");
 
-const taskForm = document.getElementById("task-form");
-const taskListEl = document.getElementById("task-list");
-const emptyMsg = document.getElementById("empty-msg");
-const formError = document.getElementById("form-error");
-const filterButtons = document.querySelectorAll(".filter-btn");
+  let tasks = [];  // initial as empty 
+  let currentFilter = "All"; // default filter 
 
-const editModal = document.getElementById("edit-modal");
-const editId = document.getElementById("edit-id");
-const editTitle = document.getElementById("edit-title");
-const editDescription = document.getElementById("edit-description");
-const editPriority = document.getElementById("edit-priority");
-const editStatus = document.getElementById("edit-status");
+  // 1 date format function 
+  function formatDate(dateInput) {
+    if (!dateInput) return "Just now";
 
-// ---------------------------------------------------------------
-// Fetch & render
-// ---------------------------------------------------------------
-async function fetchTasks() {
-  emptyMsg.textContent = "Loading tasks…";
-  try {
-    const res = await fetch(`${API_BASE}?status=${encodeURIComponent(currentFilter)}`);
-    if (!res.ok) throw new Error("Failed to load tasks");
-    const tasks = await res.json();
-    renderTasks(tasks);
-  } catch (err) {
-    emptyMsg.textContent = "Could not load tasks. Is the server running?";
-    console.error(err);
-  }
-}
+    let date;
+    if (typeof dateInput === "number") {
+      date = new Date(dateInput);
+    } else {
+      let str = String(dateInput).trim().replace(" ", "T");
+      if (!str.includes("Z") && !str.includes("+") && !str.includes("-", 10)) {
+        str += "Z";
+      }
+      date = new Date(str);
+    }
 
-function renderTasks(tasks) {
-  taskListEl.querySelectorAll(".task-item").forEach(el => el.remove());
+    if (isNaN(date.getTime())) {
+      return "Just now";
+    }
 
-  if (tasks.length === 0) {
-    emptyMsg.style.display = "block";
-    emptyMsg.textContent = "No tasks here yet.";
-    return;
-  }
-  emptyMsg.style.display = "none";
-
-  tasks.forEach(task => {
-    const item = document.createElement("div");
-    item.className = "task-item" + (task.status === "Completed" ? " completed" : "");
-    item.innerHTML = `
-      <div class="task-main">
-        <p class="task-title">${escapeHtml(task.title)}</p>
-        ${task.description ? `<p class="task-desc">${escapeHtml(task.description)}</p>` : ""}
-        <div class="task-meta">
-          <span class="badge badge-priority-${task.priority}">${task.priority}</span>
-          <span class="badge badge-status-${task.status}">${task.status}</span>
-        </div>
-      </div>
-      <div class="task-actions">
-        <button class="icon-btn toggle-btn" data-id="${task.id}" data-status="${task.status}">
-          ${task.status === "Pending" ? "Mark done" : "Reopen"}
-        </button>
-        <button class="icon-btn edit-btn" data-id="${task.id}">Edit</button>
-        <button class="icon-btn danger delete-btn" data-id="${task.id}">Delete</button>
-      </div>
-    `;
-    taskListEl.appendChild(item);
-  });
-
-  taskListEl.querySelectorAll(".toggle-btn").forEach(btn =>
-    btn.addEventListener("click", onToggleStatus)
-  );
-  taskListEl.querySelectorAll(".edit-btn").forEach(btn =>
-    btn.addEventListener("click", onEditClick)
-  );
-  taskListEl.querySelectorAll(".delete-btn").forEach(btn =>
-    btn.addEventListener("click", onDeleteClick)
-  );
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-// ---------------------------------------------------------------
-// Create
-// ---------------------------------------------------------------
-taskForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  formError.textContent = "";
-
-  const title = document.getElementById("title").value.trim();
-  const description = document.getElementById("description").value.trim();
-  const priority = document.getElementById("priority").value;
-
-  if (!title) {
-    formError.textContent = "Task name is required.";
-    return;
-  }
-
-  try {
-    const res = await fetch(API_BASE, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description, priority }),
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to create task");
-
-    taskForm.reset();
-    document.getElementById("priority").value = "Medium";
-    await fetchTasks();
-  } catch (err) {
-    formError.textContent = err.message;
   }
-});
 
-// ---------------------------------------------------------------
-// Update status (toggle)
-// ---------------------------------------------------------------
-async function onToggleStatus(e) {
-  const id = e.target.dataset.id;
-  const currentStatus = e.target.dataset.status;
-  const newStatus = currentStatus === "Pending" ? "Completed" : "Pending";
+  // Fetch first initial taskss
+  async function fetchTasks() {
+    try {
+      const res = await fetch("/api/tasks");
+      if (!res.ok) throw new Error("Failed to load tasks");
+      tasks = await res.json();  // json data to tasks array
+      renderTasks();
+    } catch (err) {
+      if (emptyMsg) emptyMsg.textContent = "Error loading tasks.";
+    }
+  }
 
-  await fetch(`${API_BASE}/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: newStatus }),
+  // Render tasks list using filter 
+  function renderTasks() {
+    taskList.innerHTML = ""; // clear previous tasks 
+
+    const filteredTasks = tasks.filter(task => {
+      if (currentFilter === "Pending") return task.status === "Pending";
+      if (currentFilter === "Completed") return task.status === "Completed";
+      return true;
+    });
+
+    if (filteredTasks.length === 0) {
+      taskList.innerHTML = `<p class="empty-msg">No ${currentFilter !== 'All' ? currentFilter.toLowerCase() : ''} tasks found.</p>`;
+      return;
+    }
+
+    // creating div for each task 
+    filteredTasks.forEach(task => {
+      const card = document.createElement("div");
+      card.className = `task-item ${task.status.toLowerCase()}`;
+
+      const createdDate = formatDate(task.created_at);
+      const isCompleted = task.status === "Completed";
+
+      card.innerHTML = `
+        <div class="task-main">
+          <h3 class="task-title ${isCompleted ? 'strikethrough' : ''}">${escapeHtml(task.title)}</h3>
+          ${task.description ? `<p class="task-desc">${escapeHtml(task.description)}</p>` : ''}
+          <div class="task-meta">
+            <span class="badge badge-priority-${task.priority}">${task.priority}</span>
+            <span class="badge badge-status-${task.status}">${task.status}</span>
+            <span class="task-date">📅 Created ${createdDate}</span>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="icon-btn success" onclick="toggleTaskStatus('${task.id}')">
+            ${isCompleted ? 'Mark Pending' : 'Mark Done'}
+          </button>
+          <button class="icon-btn" onclick="openEditModal('${task.id}')">Edit</button>
+          <button class="icon-btn danger" onclick="deleteTask('${task.id}')">Delete</button>
+        </div>
+      `;
+      taskList.appendChild(card);
+    });
+  }
+
+  // 2. TOGGLE MARK DONE / MARK PENDING
+  window.toggleTaskStatus = async (id) => {
+    const task = tasks.find(t => String(t.id) === String(id));
+    if (!task) return;
+
+    const newStatus = task.status === "Completed" ? "Pending" : "Completed";
+
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          status: newStatus
+        })
+      });
+
+      if (!res.ok) throw new Error("Failed to update task status.");
+
+      task.status = newStatus;
+      renderTasks();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // 3. CREATE TASK (REAL-TIME TIMESTAMP GENERATION)
+  taskForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (formError) formError.textContent = "";
+
+    const currentIsoTimestamp = new Date().toISOString();
+
+    const newTaskData = {
+      title: document.getElementById("title").value.trim(),
+      description: document.getElementById("description").value.trim(),
+      priority: document.getElementById("priority").value,
+      status: "Pending",
+      created_at: currentIsoTimestamp
+    };
+
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newTaskData)
+      });
+
+      if (!res.ok) throw new Error("Could not add task.");
+
+      const createdTask = await res.json();
+
+      if (!createdTask.created_at) {
+        createdTask.created_at = currentIsoTimestamp;
+      }
+
+      tasks.unshift(createdTask);
+      taskForm.reset();
+      renderTasks();
+    } catch (err) {
+      if (formError) formError.textContent = err.message;
+    }
   });
-  await fetchTasks();
-}
 
-// ---------------------------------------------------------------
-// Edit modal
-// ---------------------------------------------------------------
-async function onEditClick(e) {
-  const id = e.target.dataset.id;
-  const res = await fetch(API_BASE);
-  const tasks = await res.json();
-  const task = tasks.find(t => String(t.id) === String(id));
-  if (!task) return;
+  // Open Edit Modal
+  window.openEditModal = (id) => {
+    const task = tasks.find(t => String(t.id) === String(id));
+    if (!task) return;
 
-  editId.value = task.id;
-  editTitle.value = task.title;
-  editDescription.value = task.description || "";
-  editPriority.value = task.priority;
-  editStatus.value = task.status;
-  editModal.classList.remove("hidden");
-}
+    document.getElementById("edit-id").value = task.id;
+    document.getElementById("edit-title").value = task.title;
+    document.getElementById("edit-description").value = task.description || "";
+    document.getElementById("edit-priority").value = task.priority;
+    document.getElementById("edit-status").value = task.status;
 
-document.getElementById("cancel-edit-btn").addEventListener("click", () => {
-  editModal.classList.add("hidden");
-});
+    editModal.classList.remove("hidden");
+  };
 
-document.getElementById("save-edit-btn").addEventListener("click", async () => {
-  const id = editId.value;
-  const title = editTitle.value.trim();
-  if (!title) return;
+  // Save Edit Modal
+  saveEditBtn.addEventListener("click", async () => {
+    const id = document.getElementById("edit-id").value;
+    const updatedData = {
+      title: document.getElementById("edit-title").value.trim(),
+      description: document.getElementById("edit-description").value.trim(),
+      priority: document.getElementById("edit-priority").value,
+      status: document.getElementById("edit-status").value
+    };
 
-  await fetch(`${API_BASE}/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title,
-      description: editDescription.value.trim(),
-      priority: editPriority.value,
-      status: editStatus.value,
-    }),
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedData)
+      });
+
+      if (!res.ok) throw new Error("Failed to update task.");
+
+      const index = tasks.findIndex(t => String(t.id) === String(id));
+      if (index !== -1) {
+        tasks[index] = { ...tasks[index], ...updatedData };
+      }
+
+      editModal.classList.add("hidden");
+      renderTasks();
+    } catch (err) {
+      alert(err.message);
+    }
   });
-  editModal.classList.add("hidden");
-  await fetchTasks();
-});
 
-// ---------------------------------------------------------------
-// Delete
-// ---------------------------------------------------------------
-async function onDeleteClick(e) {
-  const id = e.target.dataset.id;
-  if (!confirm("Delete this task?")) return;
+  // Delete Task
+  window.deleteTask = async (id) => {
+    try {
+      const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete task.");
 
-  await fetch(`${API_BASE}/${id}`, { method: "DELETE" });
-  await fetchTasks();
-}
+      tasks = tasks.filter(t => String(t.id) !== String(id));
+      renderTasks();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
-// ---------------------------------------------------------------
-// Filters
-// ---------------------------------------------------------------
-filterButtons.forEach(btn => {
-  btn.addEventListener("click", () => {
-    filterButtons.forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    currentFilter = btn.dataset.filter;
-    fetchTasks();
+  // Close Modal
+  cancelEditBtn.addEventListener("click", () => {
+    editModal.classList.add("hidden");
   });
-});
 
-// Initial load
-fetchTasks();
+  // Filters
+  filterBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      filterBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentFilter = btn.dataset.filter;
+      renderTasks();
+    });
+  });
+
+  // Helper: Escape HTML
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, match => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[match]);
+  }
+
+  fetchTasks();
+});

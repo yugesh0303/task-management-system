@@ -17,7 +17,6 @@ A simple full-stack To-Do / Task Management web app.
 
 ## Project Structure
 
-```
 task-manager/
 ├── app.py                 # Flask app: routes, models, REST API
 ├── requirements.txt        # Python dependencies
@@ -28,7 +27,7 @@ task-manager/
 └── static/
     ├── css/style.css
     └── js/script.js        # Calls the REST API, renders the UI
-```
+
 
 ## Prerequisites
 
@@ -46,7 +45,7 @@ task-manager/
    ```
 
 2. **Create and activate a virtual environment**
-   ```bash
+   ```bash 
    python3 -m venv venv
    source venv/bin/activate       # Windows: venv\Scripts\activate
    ```
