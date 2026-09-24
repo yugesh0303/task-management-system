@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 
+import editModel from static/js/editModel.js
 
 # App & Database configuration
 
@@ -122,7 +123,9 @@ def update_task(task_id):
     """PUT /api/tasks/<id>  body: any of {title, description, priority, status}"""
     task = Task.query.get_or_404(task_id)
     data = request.get_json(silent=True) or {}
-
+    if "status" in data == "completed":
+        editModel.classList.remove("hidden");
+    
     if "title" in data:
         new_title = (data["title"] or "").strip()
         if not new_title:
@@ -141,6 +144,7 @@ def update_task(task_id):
         if data["status"] not in VALID_STATUSES:
             return jsonify({"error": f"'status' must be one of {VALID_STATUSES}"}), 400
         task.status = data["status"]
+        
 
     db.session.commit()
     return jsonify(task.to_dict()), 200
