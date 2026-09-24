@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 
-import editModel from static/js/editModel.js
+
 
 # App & Database configuration
 
@@ -51,6 +51,7 @@ class Task(db.Model):
             "description": self.description,
             "priority": self.priority,
             "status": self.status,
+            "editable": self.status != "pending",
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -121,11 +122,13 @@ def create_task():
 @app.route("/api/tasks/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
     """PUT /api/tasks/<id>  body: any of {title, description, priority, status}"""
-    task = Task.query.get_or_404(task_id)
+    task = Task.query.get_or_404(task_id)   ,   """ db validation handled by get_or_404 at 165 line """
     data = request.get_json(silent=True) or {}
-    if "status" in data == "completed":
-        editModel.classList.remove("hidden");
     
+    if task.status == "Completed":
+     locked_fields = {"title", "description", "priority"}
+    if locked_fields & data.keys():
+        return jsonify({"error": "Completed tasks cannot be edited"}), 409
     if "title" in data:
         new_title = (data["title"] or "").strip()
         if not new_title:
@@ -153,7 +156,7 @@ def update_task(task_id):
 @app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
     """DELETE /api/tasks/<id>"""
-    task = Task.query.get_or_404(task_id)
+    task = Task.query.get_or_404(task_id) ,   """ db validation handled by get_or_404 at 165 line """
     db.session.delete(task)
     db.session.commit()
     return jsonify({"message": f"Task {task_id} deleted"}), 200
@@ -161,7 +164,7 @@ def delete_task(task_id):
 
 @app.errorhandler(404)
 def not_found(e):
-    return jsonify({"error": "Resource not found"}), 404
+    return jsonify({"error": "Resource not found"}), 404    
 
 
 

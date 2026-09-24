@@ -9,10 +9,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const saveEditBtn = document.getElementById("save-edit-btn");
   const cancelEditBtn = document.getElementById("cancel-edit-btn");
 
-  let tasks = [];  // initial as empty 
-  let currentFilter = "All"; // default filter 
+  let tasks = [];  // initial as empty
+  let currentFilter = "All"; // default filter
 
-  // 1 date format function 
+  // Helper: read the server's error message (falls back to a default)
+  async function getErrorMessage(res, fallback) {
+    try {
+      const body = await res.json();
+      return body.error || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  // 1 date format function
   function formatDate(dateInput) {
     if (!dateInput) return "Just now";
 
@@ -40,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Fetch first initial taskss
+  // Fetch first initial tasks
   async function fetchTasks() {
     try {
       const res = await fetch("/api/tasks");
@@ -52,9 +62,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Render tasks list using filter 
+  // Render tasks list using filter
   function renderTasks() {
-    taskList.innerHTML = ""; // clear previous tasks 
+    taskList.innerHTML = ""; // clear previous tasks
 
     const filteredTasks = tasks.filter(task => {
       if (currentFilter === "Pending") return task.status === "Pending";
@@ -67,7 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // creating div for each task 
+    // creating div for each task
     filteredTasks.forEach(task => {
       const card = document.createElement("div");
       card.className = `task-item ${task.status.toLowerCase()}`;
@@ -89,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <button class="icon-btn success" onclick="toggleTaskStatus('${task.id}')">
             ${isCompleted ? 'Mark Pending' : 'Mark Done'}
           </button>
-          <button class="icon-btn" onclick="openEditModal('${task.id}')">Edit</button>
+          ${isCompleted ? '' : `<button class="icon-btn" onclick="openEditModal('${task.id}')">Edit</button>`}
           <button class="icon-btn danger" onclick="deleteTask('${task.id}')">Delete</button>
         </div>
       `;
@@ -105,20 +115,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const newStatus = task.status === "Completed" ? "Pending" : "Completed";
 
     try {
+      // Send only the status so the backend's lock on completed tasks doesn't reject it
       const res = await fetch(`/api/tasks/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: task.title,
-          description: task.description,
-          priority: task.priority,
-          status: newStatus
-        })
+        body: JSON.stringify({ status: newStatus })
       });
 
-      if (!res.ok) throw new Error("Failed to update task status.");
+      if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to update task status."));
 
       task.status = newStatus;
+      task.editable = newStatus !== "Completed";
       renderTasks();
     } catch (err) {
       alert(err.message);
@@ -147,7 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify(newTaskData)
       });
 
-      if (!res.ok) throw new Error("Could not add task.");
+      if (!res.ok) throw new Error(await getErrorMessage(res, "Could not add task."));
 
       const createdTask = await res.json();
 
@@ -166,7 +173,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Open Edit Modal
   window.openEditModal = (id) => {
     const task = tasks.find(t => String(t.id) === String(id));
-    if (!task) return;
+    if (!task || task.status === "Completed") return; // completed tasks can't be edited
 
     document.getElementById("edit-id").value = task.id;
     document.getElementById("edit-title").value = task.title;
@@ -194,11 +201,15 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify(updatedData)
       });
 
-      if (!res.ok) throw new Error("Failed to update task.");
+      if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to update task."));
 
       const index = tasks.findIndex(t => String(t.id) === String(id));
       if (index !== -1) {
-        tasks[index] = { ...tasks[index], ...updatedData };
+        tasks[index] = {
+          ...tasks[index],
+          ...updatedData,
+          editable: updatedData.status !== "Completed"
+        };
       }
 
       editModal.classList.add("hidden");
@@ -212,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.deleteTask = async (id) => {
     try {
       const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete task.");
+      if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to delete task."));
 
       tasks = tasks.filter(t => String(t.id) !== String(id));
       renderTasks();
